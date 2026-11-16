@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>站点目录归一系统 StationHub</title>
+<style>
+  :root {
+    --bg: #0f141b; --panel: #18202b; --panel2: #1f2a38; --line: #2c3a4d;
+    --txt: #dbe4ee; --muted: #8aa0b6; --accent: #4ea1ff; --green: #39c07d;
+    --red: #ff6b6b; --amber: #f0b450; --purple: #b18cff;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.5 -apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+         background:var(--bg); color:var(--txt); }
+  header { padding:16px 24px; border-bottom:1px solid var(--line); display:flex;
+           align-items:center; gap:16px; flex-wrap:wrap; background:var(--panel); }
+  header h1 { font-size:18px; margin:0; }
+  header .sub { color:var(--muted); font-size:12px; }
+  nav { display:flex; gap:4px; padding:10px 24px 0; background:var(--panel); border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  nav button { background:none; border:1px solid transparent; color:var(--muted); padding:8px 16px;
+               cursor:pointer; border-radius:8px 8px 0 0; font-size:14px; }
+  nav button.active { color:var(--txt); background:var(--bg); border-color:var(--line); border-bottom-color:var(--bg); }
+  main { padding:20px 24px; max-width:1280px; margin:0 auto; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:16px; }
+  .card h2 { margin:0 0 12px; font-size:15px; color:var(--accent); }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th,td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--muted); font-weight:600; white-space:nowrap; }
+  tr:hover td { background:var(--panel2); }
+  button.act { background:var(--panel2); border:1px solid var(--line); color:var(--txt);
+               padding:5px 12px; border-radius:6px; cursor:pointer; font-size:13px; }
+  button.act:hover { border-color:var(--accent); }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#08111e; font-weight:600; }
+  button.danger { color:var(--red); }
+  button.ok { color:var(--green); }
+  input,select,textarea { background:var(--panel2); border:1px solid var(--line); color:var(--txt);
+                          border-radius:6px; padding:7px 10px; font-size:13px; }
+  input:focus,select:focus { outline:none; border-color:var(--accent); }
+  .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  .pill { display:inline-block; padding:2px 8px; border-radius:99px; font-size:12px; }
+  .pill.same { background:rgba(57,192,125,.15); color:var(--green); }
+  .pill.diff { background:rgba(255,107,107,.15); color:var(--red); }
+  .pill.revoked { background:rgba(240,180,80,.15); color:var(--amber); }
+  .pill.num { background:rgba(78,161,255,.15); color:var(--accent); font-family:monospace; }
+  .muted { color:var(--muted); }
+  .toast { position:fixed; right:20px; bottom:20px; max-width:520px; padding:12px 16px;
+           border-radius:8px; box-shadow:0 8px 28px rgba(0,0,0,.5); z-index:99; display:none;
+           white-space:pre-wrap; font-size:13px; }
+  .toast.ok { background:#13351f; border:1px solid var(--green); }
+  .toast.err { background:#3d1717; border:1px solid var(--red); }
+  .branch { border-left:3px solid var(--purple); padding:8px 12px; margin:8px 0; background:var(--panel2); border-radius:0 8px 8px 0; }
+  code { background:var(--panel2); padding:1px 6px; border-radius:4px; font-size:12px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  @media (max-width:900px){ .grid2{grid-template-columns:1fr;} }
+  .hint { font-size:12px; color:var(--muted); margin-top:6px; }
+  .conflict { background:rgba(255,107,107,.08); border:1px solid var(--red); border-radius:8px; padding:10px 12px; margin:8px 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>📍 站点目录归一系统 <span class="sub">StationHub · 跨机构观测关联</span></h1>
+  <span class="sub">同站传递成组 · 异站约束持久 · 统一号版本可溯</span>
+</header>
+<nav id="tabs">
+  <button data-tab="import" class="active">① 导入 CSV</button>
+  <button data-tab="stations">② 站点与当前组</button>
+  <button data-tab="evidences">③ 同站/异站依据</button>
+  <button data-tab="lookup">④ 按统一号查询</button>
+</nav>
+<main>
+  <!-- 导入 -->
+  <section id="tab-import">
+    <div class="card">
+      <h2>导入站点目录 CSV</h2>
+      <div class="row">
+        <input type="file" id="csvFile" accept=".csv,text/csv">
+        <button class="act primary" onclick="doImport()">上传并导入</button>
+      </div>
+      <div class="hint">表头（支持中文）：<code>source,station_code,name</code> 或 <code>来源,源站号,名称</code>。
+        每来源至多 30 站；原始记录不可修改；新站初始独立成组并签发统一号。</div>
+      <div id="importResult"></div>
+    </div>
+    <div class="card">
+      <h2>演示数据样例</h2>
+      <pre class="muted" style="margin:0;white-space:pre-wrap;">source,station_code,name
+INS-A,001,城北观测站
+INS-A,002,滨河观测站
+INS-B,B-11,城北站(旧名)
+INS-B,B-12,临河区观测点
+INS-C,CX-7,城北监测站</pre>
+    </div>
+  </section>
+
+  <!-- 站点/组 -->
+  <section id="tab-stations" hidden>
+    <div class="card">
+      <h2>当前统一站组</h2>
+      <div class="row" style="margin-bottom:10px">
+        <button class="act" onclick="loadGroups()">刷新</button>
+        <span class="muted">组成员每次变化都会作废旧组并签发新统一号，旧号仍可在 ④ 查询。</span>
+      </div>
+      <div id="groupsBox"></div>
+    </div>
+    <div class="card">
+      <h2>全部站点</h2>
+      <div class="row" style="margin-bottom:10px">
+        <select id="stationA"></select>
+        <select id="stationB"></select>
+        <button class="act ok" onclick="doSame()">确认同站</button>
+        <button class="act danger" onclick="doDiff()">判为异站</button>
+      </div>
+      <div class="hint">同站会传递合并两站所在组；若存在异站依据或同源冲突，操作整次回滚并列出冲突依据。</div>
+      <div id="stationsBox" style="margin-top:12px"></div>
+    </div>
+  </section>
+
+  <!-- 依据 -->
+  <section id="tab-evidences" hidden>
+    <div class="card">
+      <h2>同站依据（可撤销，撤销后按剩余关系重分组）</h2>
+      <div class="row" style="margin-bottom:10px"><button class="act" onclick="loadEvidences()">刷新</button></div>
+      <div id="sameBox"></div>
+    </div>
+    <div class="card">
+      <h2>异站判定（持久生效，不可撤销，阻止后续绕过合并）</h2>
+      <div id="diffBox"></div>
+    </div>
+  </section>
+
+  <!-- 按号查询 -->
+  <section id="tab-lookup" hidden>
+    <div class="card">
+      <h2>按统一号查询（含历史旧号）</h2>
+      <div class="row">
+        <input id="numberInput" placeholder="例如 U-000001" style="width:220px">
+        <button class="act primary" onclick="doLookup()">查询</button>
+      </div>
+      <div class="hint">旧号固定返回签发时的成员快照；同时列出这些成员现在所属的全部组——拆组后的每个分支都会展示，不会静默选一组。</div>
+      <div id="lookupBox" style="margin-top:12px"></div>
+    </div>
+  </section>
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const api = async (path, opts) => {
+  const r = await fetch(path, opts);
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(JSON.stringify(data.detail || data, null, 2));
+  return data;
+};
+function toast(msg, ok){ const t=$('#toast'); t.textContent=msg; t.className='toast '+(ok?'ok':'err'); t.style.display='block';
+  setTimeout(()=>t.style.display='none', ok?2600:9000); }
+function esc(s){ return String(s??'').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function fmt(d){ return d ? new Date(d).toLocaleString('zh-CN',{hour12:false}) : ''; }
+
+document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('#tabs button').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active');
+  document.querySelectorAll('main section').forEach(s=>s.hidden = s.id !== 'tab-'+b.dataset.tab);
+  if (b.dataset.tab==='stations') { loadGroups(); loadStations(); }
+  if (b.dataset.tab==='evidences') loadEvidences();
+});
+
+// ---------------- 导入
+async function doImport(){
+  const f = $('#csvFile').files[0];
+  if (!f) return toast('请先选择 CSV 文件', false);
+  const fd = new FormData(); fd.append('file', f);
+  try {
+    const reports = await api('/api/import', {method:'POST', body:fd});
+    $('#importResult').innerHTML = reports.map(r =>
+      `<div class="branch">来源 <b>${esc(r.source_code)}</b>：新增 ${r.inserted} 站，跳过已存在 ${r.skipped_existing}，
+       累计 ${r.total_for_source} 站；新签发号 ${r.new_numbers.map(n=>`<span class="pill num">${esc(n)}</span>`).join(' ')||'无'}</div>`).join('');
+    toast('导入成功（单事务提交，失败会整次回滚）', true);
+  } catch(e){ $('#importResult').innerHTML=''; toast('导入失败：\n'+e.message, false); }
+}
+
+// ---------------- 站点与组
+let stationCache = [];
+async function loadStations(){
+  stationCache = await api('/api/stations');
+  const opts = stationCache.map(s=>`<option value="${s.id}">#${s.id} ${esc(s.source_code_label)} ${esc(s.name)}</option>`).join('');
+  $('#stationA').innerHTML = opts; $('#stationB').innerHTML = opts;
+  if (stationCache[1]) $('#stationB').selectedIndex = 1;
+  $('#stationsBox').innerHTML = `<table><thead><tr>
+    <th>ID</th><th>来源/源站号</th><th>名称</th><th>当前组</th><th>当前统一号</th></tr></thead><tbody>
+    ${stationCache.map(s=>`<tr><td>${s.id}</td><td><code>${esc(s.source_code_label)}</code></td>
+      <td>${esc(s.name)}</td><td>#${s.current_group_id??'-'}</td>
+      <td><span class="pill num">${esc(s.current_number??'-')}</span></td></tr>`).join('')}</tbody></table>`;
+}
+async function loadGroups(){
+  const groups = await api('/api/groups');
+  $('#groupsBox').innerHTML = groups.map(g=>`
+    <div class="branch"><b>组 #${g.group_id}</b> · 当前号 <span class="pill num">${esc(g.current_number??'-')}</span>
+      · 建组于 ${fmt(g.created_at)} · ${g.members.length} 个成员
+      <table style="margin-top:6px"><tbody>${g.members.map(m=>`<tr>
+        <td><code>${esc(m.source_code_label)}</code></td><td>${esc(m.name)}</td>
+        <td class="muted">来源 ${esc(m.source_name)}</td></tr>`).join('')}</tbody></table></div>`).join('')
+    || '<span class="muted">暂无数据，请先导入。</span>';
+}
+async function doSame(){
+  try {
+    const r = await api('/api/evidences/same', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({station_a_id:+$('#stationA').value, station_b_id:+$('#stationB').value, note:'网页确认同站'})});
+    toast(`同站依据 #${r.evidence_id} 已记录`+(r.new_numbers.length?`，新统一号：${r.new_numbers.join(', ')}`:'（成员未变，不换号）'), true);
+    loadGroups(); loadStations();
+  } catch(e){ toast('同站确认被拒绝（整次回滚，依据未写入）：\n'+e.message, false); }
+}
+async function doDiff(){
+  try {
+    const r = await api('/api/evidences/diff', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({station_a_id:+$('#stationA').value, station_b_id:+$('#stationB').value, note:'网页判异站'})});
+    toast(`异站判定 #${r.evidence_id} 已记录，后续合并将被该约束拦截`, true);
+    loadEvidences();
+  } catch(e){ toast('异站判定失败（整次回滚）：\n'+e.message, false); }
+}
+
+// ---------------- 依据
+async function loadEvidences(){
+  const d = await api('/api/evidences?include_revoked=true');
+  const nameOf = id => { const s = stationCache.find(x=>x.id===id); return s ? `${s.source_code_label} ${s.name}` : '#'+id; };
+  $('#sameBox').innerHTML = `<table><thead><tr><th>依据ID</th><th>站点 A</th><th>站点 B</th><th>状态</th><th>时间</th><th>操作</th></tr></thead><tbody>
+    ${d.same.map(e=>`<tr><td>#${e.id}</td><td>${esc(nameOf(e.station_a_id))}</td><td>${esc(nameOf(e.station_b_id))}</td>
+      <td>${e.revoked?'<span class="pill revoked">已撤销 '+fmt(e.revoked_at)+'</span>':'<span class="pill same">有效</span>'}</td>
+      <td class="muted">${fmt(e.created_at)}</td>
+      <td>${e.revoked?'-':`<button class="act danger" onclick="doRevoke(${e.id})">撤销并重分组</button>`}</td></tr>`).join('')
+      || '<tr><td colspan="6" class="muted">暂无同站依据</td></tr>'}</tbody></table>`;
+  $('#diffBox').innerHTML = `<table><thead><tr><th>判定ID</th><th>站点 A</th><th>站点 B</th><th>说明</th><th>时间</th></tr></thead><tbody>
+    ${d.diff.map(e=>`<tr><td>#${e.id}</td><td>${esc(nameOf(e.station_a_id))}</td><td>${esc(nameOf(e.station_b_id))}</td>
+      <td class="muted">${esc(e.note??'')}</td><td class="muted">${fmt(e.created_at)}</td></tr>`).join('')
+      || '<tr><td colspan="5" class="muted">暂无异站判定</td></tr>'}</tbody></table>`;
+}
+async function doRevoke(id){
+  if (!confirm(`确认撤销同站依据 #${id}？系统将按剩余有效关系重新分组，仍有效的异站判断保留。`)) return;
+  try {
+    const r = await api('/api/evidences/same/revoke', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({evidence_id:id, note:'网页撤销'})});
+    toast(`依据 #${id} 已撤销，重分组完成`+(r.new_numbers.length?`，新统一号：${r.new_numbers.join(', ')}`:'（组未变化）'), true);
+    loadEvidences(); loadGroups(); loadStations();
+  } catch(e){ toast('撤销失败（整次回滚）：\n'+e.message, false); }
+}
+
+// ---------------- 按号查询
+async function doLookup(){
+  const n = $('#numberInput').value.trim();
+  if (!n) return;
+  try {
+    const r = await api('/api/numbers/'+encodeURIComponent(n));
+    $('#lookupBox').innerHTML = `
+      <div class="branch">统一号 <span class="pill num">${esc(r.number)}</span> · 签发原因 <b>${esc(r.reason)}</b>
+        · 签发时间 ${fmt(r.created_at)} ${r.split?`<span class="pill diff">已拆开为 ${r.branch_count} 个分支</span>`:'<span class="pill same">成员仍在同一组</span>'}</div>
+      <h2 style="font-size:14px;color:var(--amber)">签发时固定的成员快照（旧号含义不变）</h2>
+      <table><thead><tr><th>来源/源站号</th><th>名称</th><th>来源</th></tr></thead><tbody>
+      ${r.snapshot_members.map(m=>`<tr><td><code>${esc(m.source_code)}</code></td><td>${esc(m.name)}</td><td class="muted">${esc(m.source_name)}</td></tr>`).join('')}
+      </tbody></table>
+      <h2 style="font-size:14px;color:var(--purple);margin-top:14px">这些成员现在所属的完整组（全部 ${r.branch_count} 个分支）</h2>
+      ${r.current_branches.map(b=>`<div class="branch"><b>当前组 #${b.group_id}</b> · 当前号 <span class="pill num">${esc(b.current_number)}</span>
+        <table style="margin-top:6px"><tbody>${b.members.map(m=>`<tr><td><code>${esc(m.source_code_label)}</code></td>
+        <td>${esc(m.name)}</td><td class="muted">${esc(m.source_name)}</td></tr>`).join('')}</tbody></table></div>`).join('')}`;
+  } catch(e){ $('#lookupBox').innerHTML=`<div class="conflict">${esc(e.message)}</div>`; }
+}
+</script>
+</body>
+</html>

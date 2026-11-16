@@ -1,0 +1,50 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: stationhub
+      POSTGRES_PASSWORD: stationhub
+      POSTGRES_DB: stationhub
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stationhub -d stationhub"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg2://stationhub:stationhub@db:5432/stationhub
+      MAX_STATIONS_PER_SOURCE: "30"
+    ports:
+      - "8000:8000"
+
+  # 一次性演示数据导入：api 健康后上传 demo CSV。
+  demo:
+    image: curlimages/curl:8.11.1
+    depends_on:
+      api:
+        condition: service_started
+    volumes:
+      - ./demo:/demo:ro
+    entrypoint: ["/bin/sh","-c"]
+    command:
+      - |
+        for i in $$(seq 1 30); do
+          if curl -sf http://api:8000/health >/dev/null 2>&1; then break; fi
+          sleep 2
+        done
+        echo "=== 导入演示数据 ==="
+        curl -s -X POST http://api:8000/api/import -F "file=@/demo/stations_demo.csv"
+        echo
+        echo "=== 演示数据已导入，访问 http://localhost:8000 ==="
+
+volumes:
+  pgdata:
